@@ -5,7 +5,7 @@ model = YOLO("yolov11n.pt")  # Load an official Detect model
 
 # Perform tracking with the model
 results = model.track(
-    "./YOLO_object_tracking/front_camera_video.avi",
+    "./comma_small.mp4",
     show=False, stream=False
 )
 
