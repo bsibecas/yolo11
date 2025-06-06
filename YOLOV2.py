@@ -19,12 +19,13 @@ results_dfs = []
 for res in results:
     df = res.to_df()
     if df is not None and not df.empty:
-        # ✅ Filtrar por ID de clase
         if 'cls' in df.columns:
             df = df[df['cls'].isin(vehicle_class_ids)]
         results_dfs.append(df)
     else:
         results_dfs.append(None)
+    
+    print("RESULTS", results_dfs)
 
 track_paths = []
 global_track_id = 0
