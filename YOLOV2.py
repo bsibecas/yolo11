@@ -2,17 +2,25 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-model = YOLO("yolo11n.pt")  # Sigue usando yolo11n, aunque puede que no tenga tracking
+model = YOLO("yolo11n.pt")  # Usa YOLO11n (compatible con Ultralyitcs)
 
 input_video_path = "./comma_small.mp4"
 output_video_path = "./tracked_comma_output.mp4"
 
+# Corre el modelo sobre el video
 results = model.track(input_video_path, show=False, stream=False)
 
-results_dfs = [res.to_df() for res in results]
-track_paths = []
+# Define las clases de vehículos que te interesan
+vehicle_classes = ['car', 'truck', 'bus', 'motorbike', 'bicycle']
 
-# Generador de ID en caso de que no haya 'track_id'
+# Extrae los DataFrames y filtra solo vehículos
+results_dfs = []
+for res in results:
+    df = res.to_df()
+    df_vehicles = df[df['name'].isin(vehicle_classes)]
+    results_dfs.append(df_vehicles)
+
+track_paths = []
 global_track_id = 0
 
 for res in results_dfs:
@@ -20,7 +28,6 @@ for res in results_dfs:
         track_paths.append(({}, [], []))
         continue
 
-    # Si 'track_id' no existe, generar IDs únicos por objeto
     if 'track_id' in res.columns:
         tracks = res['track_id'].astype(str).values
     else:
@@ -47,12 +54,14 @@ for frame_tracks, _, _ in track_paths:
             merged_tracks[track_id] = []
         merged_tracks[track_id].append(center)
 
-# Leer vídeo original y preparar salida
+# Leer vídeo original y preparar salida .mp4
 cap = cv2.VideoCapture(input_video_path)
 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fps = cap.get(cv2.CAP_PROP_FPS)
-fourcc = cv2.VideoWriter_fourcc(*'XVID')
+
+# Codificador MP4
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
 
 frame_idx = 0
@@ -82,4 +91,4 @@ while cap.isOpened():
 
 cap.release()
 out.release()
-print("✅ Video con tracking (simulado) generado:", output_video_path)
+print("✅ Video con tracking de vehículos generado:", output_video_path)
