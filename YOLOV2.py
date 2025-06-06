@@ -49,11 +49,13 @@ for frame_idx, res in enumerate(results):
             print(f"📦 Frame {frame_idx} - todas las detecciones:")
             print(df[['cls', 'name']])
 
-            # Filtramos solo vehículos
+            # 👉 FILTRAMOS SOLO VEHÍCULOS
             df = df[df['cls'].isin(vehicle_class_ids)]
+            all_classes.extend(df['cls'].tolist())
         else:
             print(f"⚠️ Frame {frame_idx} no contiene columna 'cls'")
 
+        results_dfs.append(df)
         results_dfs.append(df)
     else:
         results_dfs.append(None)
