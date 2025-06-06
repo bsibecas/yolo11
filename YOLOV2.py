@@ -2,35 +2,51 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-# Cargar modelo YOLOv11
-model = YOLO("yolo11n.pt")
+# Carga el modelo
+model = YOLO("yolo11n.pt")  # Asegúrate de tener este modelo en tu carpeta
 
-# Ruta del vídeo de entrada y salida
+# Ruta del vídeo
 input_video_path = "./comma_small.mp4"
-output_video_path = "./tracked_comma_vehicles.mp4"
+output_video_path = "./tracked_comma_output.mp4"
 
-# Ejecutar tracking
+# Obtiene nombres de clases del modelo
+class_names = model.names
+
+# Clases de vehículos que queremos detectar
+vehicle_class_names = ['car', 'truck', 'bus', 'motorbike', 'bicycle']
+vehicle_class_ids = [i for i, name in class_names.items() if name in vehicle_class_names]
+
+# Ejecuta el tracking en el vídeo
 results = model.track(input_video_path, show=False, stream=False)
 
-# Convertir resultados a DataFrame y filtrar solo vehículos
-vehicle_classes = {'car', 'bus', 'truck', 'motorbike'}  # Clases deseadas
+# Procesa los resultados por frame
 results_dfs = []
-
 for res in results:
     df = res.to_df()
-    if 'class_name' in df.columns:
-        df = df[df['class_name'].isin(vehicle_classes)]
-    results_dfs.append(df)
+    if df is not None and not df.empty:
+        df_vehicles = df[df['cls'].isin(vehicle_class_ids)]
+    else:
+        df_vehicles = df  # None o vacío
+    results_dfs.append(df_vehicles)
 
 track_paths = []
+global_track_id = 0
 
-for res in results_dfs:
-    if res.empty:
-        track_paths.append(({}, [], []))
+# Extrae centros de los objetos para las trayectorias
+for df in results_dfs:
+    if df is None or df.empty:
+        track_paths.append(({}, [], [], []))
         continue
 
-    tracks = res['track_id'].astype(str).values
-    bboxes = res['box'].values
+    # Usa 'track_id' si está disponible, si no, genera uno
+    if 'track_id' in df.columns:
+        tracks = df['track_id'].astype(str).values
+    else:
+        tracks = [str(global_track_id + i) for i in range(len(df))]
+        global_track_id += len(df)
+
+    bboxes = df['box'].values
+    classes = df['cls'].values
     bboxes = [dict(bbox) for bbox in bboxes]
 
     frame_tracks = {}
@@ -40,22 +56,22 @@ for res in results_dfs:
             int((bbox['y1'] + bbox['y2']) / 2)
         )
         frame_tracks[f'track_{track}'] = center
-    track_paths.append((frame_tracks, bboxes, tracks))
+    track_paths.append((frame_tracks, bboxes, tracks, classes))
 
-# Consolidar trayectorias por track_id
+# Construye las trayectorias completas
 merged_tracks = {}
-for frame_tracks, _, _ in track_paths:
+for frame_tracks, _, _, _ in track_paths:
     for track_id, center in frame_tracks.items():
         if track_id not in merged_tracks:
             merged_tracks[track_id] = []
         merged_tracks[track_id].append(center)
 
-# Procesar vídeo de entrada para generar salida
+# Lectura de vídeo original y configuración del output .mp4
 cap = cv2.VideoCapture(input_video_path)
 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fps = cap.get(cv2.CAP_PROP_FPS)
-fourcc = cv2.VideoWriter_fourcc(*'XVID')
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Para archivo .mp4
 out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
 
 frame_idx = 0
@@ -64,17 +80,18 @@ while cap.isOpened():
     if not ret or frame_idx >= len(track_paths):
         break
 
-    frame_tracks, bboxes, tracks = track_paths[frame_idx]
+    frame_tracks, bboxes, tracks, classes = track_paths[frame_idx]
 
-    for bbox, track in zip(bboxes, tracks):
+    for bbox, track, cls in zip(bboxes, tracks, classes):
         x1, y1, x2, y2 = map(int, [bbox['x1'], bbox['y1'], bbox['x2'], bbox['y2']])
         center = (int((x1 + x2) / 2), int((y1 + y2) / 2))
 
-        # Dibujar bounding box e ID
+        # Dibuja la caja y texto
+        label = f"{class_names[int(cls)]} ID {track}"
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(frame, f'ID {track}', (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.putText(frame, label, (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-        # Dibujar trayectoria
+        # Dibuja la trayectoria
         track_id_str = f'track_{track}'
         if track_id_str in merged_tracks:
             points = merged_tracks[track_id_str]
@@ -87,4 +104,4 @@ while cap.isOpened():
 
 cap.release()
 out.release()
-print("✅ Video generado solo con detección de vehículos: tracked_comma_vehicles.avi")
+print("✅ Vídeo generado con detección de vehículos y tracking:", output_video_path)
