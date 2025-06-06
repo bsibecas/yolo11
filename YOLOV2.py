@@ -5,7 +5,7 @@ from ultralytics import YOLO
 model = YOLO("yolo11n.pt")  # Sigue usando yolo11n, aunque puede que no tenga tracking
 
 input_video_path = "./comma_small.mp4"
-output_video_path = "./tracked_comma_output.avi"
+output_video_path = "./tracked_comma_output.mp4"
 
 results = model.track(input_video_path, show=False, stream=False)
 
