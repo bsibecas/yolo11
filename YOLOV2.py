@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from ultralytics import YOLO
+from collections import Counter
 
 model = YOLO("yolo11n.pt")
 
@@ -10,23 +11,57 @@ output_video_path = "./tracked_comma_output.mp4"
 # Clases de vehículos por nombre
 vehicle_class_names = ['car', 'truck', 'bus', 'motorbike', 'bicycle']
 
+# Mostrar todas las clases del modelo
+print("\n📋 Todas las clases del modelo:")
+print(model.names)
+
 # Mapear a índices de clase (cls)
 vehicle_class_ids = [i for i, name in model.names.items() if name in vehicle_class_names]
 
+if not vehicle_class_ids:
+    print("🚨 No se encontraron IDs de vehículos en model.names")
+
+print("🔎 Clases en el modelo:")
+for k, v in model.names.items():
+    print(f"{k}: {v}")
+
+print("✅ IDs de clases de vehículos:", vehicle_class_ids)
+
+# Mostrar el mapeo de ID a nombre para vehículos
+print("\n🔍 Mapeo de IDs de vehículos:")
+for i in vehicle_class_ids:
+    print(f"{i}: {model.names[i]}")
+
+# Procesamiento con YOLO
 results = model.track(input_video_path, show=False, stream=False)
 
 results_dfs = []
-for res in results:
+all_classes = []
+
+for frame_index, res in enumerate(results):
     df = res.to_df()
     if df is not None and not df.empty:
+        print(f"\n📦 Frame {frame_index} - todas las detecciones:")
+        print(df[['name', 'cls']])
+
+        all_classes.extend(df['cls'].tolist())
+
         if 'cls' in df.columns:
-            df = df[df['cls'].isin(vehicle_class_ids)]
+            df_filtered = df[df['cls'].isin(vehicle_class_ids)]
+            print(f"🚗 Frame {frame_index} - después del filtro de vehículos:")
+            print(df_filtered[['name', 'cls']])
+            df = df_filtered
         results_dfs.append(df)
     else:
         results_dfs.append(None)
-    
-    print("RESULTS", results_dfs)
 
+# Conteo total de clases detectadas
+print("\n📊 Conteo total de clases detectadas en todo el video:")
+counter = Counter(all_classes)
+for cls_id, count in counter.items():
+    print(f"{model.names[cls_id]} ({cls_id}): {count}")
+
+# Seguimiento de trayectorias
 track_paths = []
 global_track_id = 0
 
