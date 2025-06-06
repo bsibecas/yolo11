@@ -34,18 +34,17 @@ for res in results:
         df = df[(df['class_name'].isin(vehicle_classes)) & (df['confidence'] > 0.4)]
 
     results_dfs.append(df)
-
 track_paths = []
 
 for res in results_dfs:
     if res.empty or 'track_id' not in res.columns:
-        track_paths.append(({}, [], []))
+        track_paths.append(({}, [], [], []))
         continue
 
     tracks = res['track_id'].astype(str).values
     bboxes = res['box'].values
-    class_names_this_frame = res['class_name'].values
     bboxes = [dict(bbox) for bbox in bboxes]
+    class_names_this_frame = res['class_name'].values if 'class_name' in res.columns else ['unknown'] * len(tracks)
 
     frame_tracks = {}
     for track, bbox in zip(tracks, bboxes):
@@ -54,6 +53,7 @@ for res in results_dfs:
             int((bbox['y1'] + bbox['y2']) / 2)
         )
         frame_tracks[f'track_{track}'] = center
+
     track_paths.append((frame_tracks, bboxes, tracks, class_names_this_frame))
 
 # Consolidar trayectorias
