@@ -2,38 +2,34 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-model = YOLO("yolo11n.pt")  # Usa YOLO11n (compatible con Ultralyitcs)
+# Cargar modelo YOLOv11
+model = YOLO("yolo11n.pt")
 
+# Ruta del vídeo de entrada y salida
 input_video_path = "./comma_small.mp4"
-output_video_path = "./tracked_comma_output.mp4"
+output_video_path = "./tracked_comma_vehicles.mp4"
 
-# Corre el modelo sobre el video
+# Ejecutar tracking
 results = model.track(input_video_path, show=False, stream=False)
 
-# Define las clases de vehículos que te interesan
-vehicle_classes = ['car', 'truck', 'bus', 'motorbike', 'bicycle']
-
-# Extrae los DataFrames y filtra solo vehículos
+# Convertir resultados a DataFrame y filtrar solo vehículos
+vehicle_classes = {'car', 'bus', 'truck', 'motorbike'}  # Clases deseadas
 results_dfs = []
+
 for res in results:
     df = res.to_df()
-    df_vehicles = df[df['name'].isin(vehicle_classes)]
-    results_dfs.append(df_vehicles)
+    if 'class_name' in df.columns:
+        df = df[df['class_name'].isin(vehicle_classes)]
+    results_dfs.append(df)
 
 track_paths = []
-global_track_id = 0
 
 for res in results_dfs:
-    if res is None or res.empty:
+    if res.empty:
         track_paths.append(({}, [], []))
         continue
 
-    if 'track_id' in res.columns:
-        tracks = res['track_id'].astype(str).values
-    else:
-        tracks = [str(global_track_id + i) for i in range(len(res))]
-        global_track_id += len(res)
-
+    tracks = res['track_id'].astype(str).values
     bboxes = res['box'].values
     bboxes = [dict(bbox) for bbox in bboxes]
 
@@ -46,7 +42,7 @@ for res in results_dfs:
         frame_tracks[f'track_{track}'] = center
     track_paths.append((frame_tracks, bboxes, tracks))
 
-# Consolidar trayectorias
+# Consolidar trayectorias por track_id
 merged_tracks = {}
 for frame_tracks, _, _ in track_paths:
     for track_id, center in frame_tracks.items():
@@ -54,14 +50,12 @@ for frame_tracks, _, _ in track_paths:
             merged_tracks[track_id] = []
         merged_tracks[track_id].append(center)
 
-# Leer vídeo original y preparar salida .mp4
+# Procesar vídeo de entrada para generar salida
 cap = cv2.VideoCapture(input_video_path)
 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fps = cap.get(cv2.CAP_PROP_FPS)
-
-# Codificador MP4
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+fourcc = cv2.VideoWriter_fourcc(*'XVID')
 out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
 
 frame_idx = 0
@@ -76,9 +70,11 @@ while cap.isOpened():
         x1, y1, x2, y2 = map(int, [bbox['x1'], bbox['y1'], bbox['x2'], bbox['y2']])
         center = (int((x1 + x2) / 2), int((y1 + y2) / 2))
 
+        # Dibujar bounding box e ID
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(frame, f'ID {track}', (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
+        # Dibujar trayectoria
         track_id_str = f'track_{track}'
         if track_id_str in merged_tracks:
             points = merged_tracks[track_id_str]
@@ -91,4 +87,4 @@ while cap.isOpened():
 
 cap.release()
 out.release()
-print("✅ Video con tracking de vehículos generado:", output_video_path)
+print("✅ Video generado solo con detección de vehículos: tracked_comma_vehicles.avi")
