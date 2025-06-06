@@ -19,13 +19,13 @@ print(model.names)
 vehicle_class_ids = [i for i, name in model.names.items() if name in vehicle_class_names]
 
 if not vehicle_class_ids:
-    print("🚨 No se encontraron IDs de vehículos en model.names")
+    print(" No se encontraron IDs de vehículos en model.names")
 
 print("🔎 Clases en el modelo:")
 for k, v in model.names.items():
     print(f"{k}: {v}")
 
-print("✅ IDs de clases de vehículos:", vehicle_class_ids)
+print("IDs de clases de vehículos:", vehicle_class_ids)
 
 # Mostrar el mapeo de ID a nombre para vehículos
 print("\n🔍 Mapeo de IDs de vehículos:")
@@ -35,22 +35,25 @@ for i in vehicle_class_ids:
 # Procesamiento con YOLO
 results = model.track(input_video_path, show=False, stream=False)
 
-results_dfs = []
 all_classes = []
+results_dfs = []
 
-for frame_index, res in enumerate(results):
+for frame_idx, res in enumerate(results):
     df = res.to_df()
     if df is not None and not df.empty:
-        print(f"\n📦 Frame {frame_index} - todas las detecciones:")
-        print(df[['name', 'cls']])
-
-        all_classes.extend(df['cls'].tolist())
+        print(f"\n📋 Columnas disponibles en el DataFrame del frame {frame_idx}: {df.columns.tolist()}")
+        print(df.head())  # Muestra las primeras filas para depurar
 
         if 'cls' in df.columns:
-            df_filtered = df[df['cls'].isin(vehicle_class_ids)]
-            print(f"🚗 Frame {frame_index} - después del filtro de vehículos:")
-            print(df_filtered[['name', 'cls']])
-            df = df_filtered
+            df['name'] = df['cls'].apply(lambda x: model.names.get(int(x), 'unknown'))
+            print(f"📦 Frame {frame_idx} - todas las detecciones:")
+            print(df[['cls', 'name']])
+
+            # Filtramos solo vehículos
+            df = df[df['cls'].isin(vehicle_class_ids)]
+        else:
+            print(f"⚠️ Frame {frame_idx} no contiene columna 'cls'")
+
         results_dfs.append(df)
     else:
         results_dfs.append(None)
